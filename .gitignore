@@ -131,3 +131,4 @@ dmypy.json
 # Personal
 .DS_Store
 task2/data/*.csv
+!task2/data/sample.csv
