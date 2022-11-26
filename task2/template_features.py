@@ -3,7 +3,7 @@ import biosppy.signals.ecg as ecg
 from full_Goodfellow_preprocess import *
 
 
-def calculate_qrs_bounds(templates, fs=300):
+def calculate_qrs_bounds(templates):
     # Empty lists of QRS start and end times
     qrs_starts_sp = []
     qrs_ends_sp = []
@@ -78,6 +78,8 @@ def preprocess_pqrst(templates):
     r_amps = templates[rpeak_pos, :]
     r_amp = median_template[rpeak_pos]
     r_amp_std = np.std(r_amps)
+    r_amp_skew = sc.stats.skew(r_amps)
+    r_amp_kurtosis = sc.stats.kurtosis(r_amps)
 
     """
     Q-Wave
@@ -121,6 +123,7 @@ def preprocess_pqrst(templates):
     p_amp = median_template[p_pos]
     p_amp_std = np.std(p_amps)
     p_times_std = np.std(p_times_sp)
+    p_eng = np.sum(np.power(median_template[max(p_pos - 10, 0):(p_pos + 10)], 2))
 
     """
     S-Wave
@@ -165,9 +168,19 @@ def preprocess_pqrst(templates):
     t_amp = median_template[t_pos]
     t_amp_std = np.std(t_amps)
     t_times_std = np.std(t_times_sp)
+    t_eng = np.sum(np.power(median_template[(t_pos - 10):(t_pos + 10)], 2))
 
-    return r_amp, q_amp, p_amp, s_amp, t_amp, rpeak_pos, q_pos, p_pos, s_pos, t_pos, r_amp_std, q_amp_std, p_amp_std, \
-           s_amp_std, t_amp_std, q_times_std, p_times_std, s_times_std, t_times_std
+    """
+    Interwave
+    """
+    pr_std = np.std(rpeak_pos - p_times_sp)
+    qt_std = np.std(t_times_sp - q_times_sp)
+    qs_std = np.std(s_times_sp - q_times_sp)
+
+    return r_amp, q_amp, p_amp, s_amp, t_amp, rpeak_pos, q_pos, p_pos, s_pos, \
+           t_pos, r_amp_std, q_amp_std, p_amp_std, s_amp_std, t_amp_std, \
+           q_times_std, p_times_std, s_times_std, t_times_std, r_amp_skew, \
+           r_amp_kurtosis, p_eng, t_eng, pr_std, qt_std, qs_std
 
 
 def calculate_qrs_correlation_statistics(templates):
@@ -201,7 +214,39 @@ def calculate_qrs_correlation_statistics(templates):
     return qrs_corr_coeff_median, qrs_corr_coeff_std
 
 
+def arhythmia_index(dRR):
+    # from https://www.cinc.org/Proceedings/2002/pdf/485.pdf
+    # worked nicely for https://www.cinc.org/archives/2017/pdf/342-204.pdf
+    if dRR.shape[0] < 3:
+        return np.nan
+    cat = np.zeros((dRR.shape[0] - 2,))
+    a = 0.9
+    b = 0.9
+    c = 1.5
+
+    for i in range(1, dRR.shape[0] - 1):
+        if dRR[i] < 0.6 and dRR[i] < dRR[i + 1]:
+            cat[i - 1] = 1
+            pulse = 1
+            for j in range(i + 1, dRR.shape[0] - 1):
+                if (dRR[j - 1] < 0.8 and dRR[j] < 0.8 and dRR[j + 1] < 0.8) or (dRR[j - 1] + dRR[j] + dRR[j + 1] < 1.8):
+                    cat[j - 1] = 1
+                    pulse += 1
+                elif pulse < 4:
+                    cat[(i - 1):j] = np.zeros((j - i + 1,))
+
+        if dRR[i] < a * dRR[i - 1] and dRR[i - 1] < b * dRR[i + 1]:
+            cat[i - 1] = 1
+
+        if dRR[i] > c * dRR[i - 1]:
+            cat[i - 1] = 1
+
+    return np.sum(cat) / cat.shape[0]
+
+
 def extract_template_features(X):
+    # template features
+
     # amplitudes
     median_r_amp = np.empty((X.shape[0],))
     median_q_amp = np.empty((X.shape[0],))
@@ -229,6 +274,10 @@ def extract_template_features(X):
     median_qt = np.empty((X.shape[0],))
     median_qs = np.empty((X.shape[0],))
 
+    pr_stdv = np.empty((X.shape[0],))
+    qt_stdv = np.empty((X.shape[0],))
+    qs_stdv = np.empty((X.shape[0],))
+
     # st value
     st = np.empty((X.shape[0],))
 
@@ -236,49 +285,32 @@ def extract_template_features(X):
     qrs_corr_coeff_med = np.empty((X.shape[0],))
     qrs_corr_coeff_std = np.empty((X.shape[0],))
 
+    # arhythmia index
+    arhythm_idx = np.empty((X.shape[0],))
+
+    # r_amp features
+    r_kurtosis = np.empty((X.shape[0],))
+    r_skew = np.empty((X.shape[0],))
+
+    # energies
+    p_energy = np.empty((X.shape[0],))
+    t_energy = np.empty((X.shape[0],))
+
     for i in range(X.shape[0]):
 
         signal_raw = X.iloc[i].dropna().to_numpy(dtype='float32')
 
-        ecg_processed = ecg.ecg(signal_raw, 300, show=False)
-
-        # filter
-        signal = apply_filter(signal_raw)
-
-        # get r_peaks
-        r_peaks = ecg_processed['rpeaks']
-        rr = np.median(np.diff(r_peaks)) * 1000 / 300
-
-        # using extraction method of Goodfellow, they use 0.25 seconds before r_peak,
-        # as opposed to 0.2 before r_peak as in ecg.ecg
-        templates, r_peaks = extract_templates(signal, r_peaks)
-
-        # templates are of shape (number sample points, number beats), this is a bit
-        # confusing, but I left it as is to make adaption of the following functions
-        # easier
-
-        # multiply inverted signals by -1
-        signal, templates, signal_raw = invert(signal, templates, signal_raw)
-
-        # normalize
-        signal, templates, signal_raw = normalize(signal, templates, signal_raw)
-
-        # steps above are done for all features
-
-        # correct some shifted r_peaks -> this is done for template and hrv statistics
-        templates, r_peaks = r_peak_check(signal, templates, r_peaks)
-
-        # filter noisy heartbeats based on correlation with median heartbeat
-        # -> this is only done for template statistics
-        before = r_peaks.shape[0]
-        templates, r_peaks = filter_rpeaks(templates, r_peaks)
-        median_template = np.median(templates, axis=1)
+        templates, r_peaks, rr = pre_process(signal_raw)
 
         if templates.shape[1] > 0:
 
+            median_template = np.median(templates, axis=1)
+
             qrs_start, qrs_end = calculate_qrs_bounds(templates)
-            r_amp, q_amp, p_amp, s_amp, t_amp, r_pos, q_pos, p_pos, s_pos, t_pos, r_std, q_std, p_std, s_std, t_std, q_times_std, p_times_std, s_times_std, t_times_std = preprocess_pqrst(
-                templates)
+            r_amp, q_amp, p_amp, s_amp, t_amp, r_pos, q_pos, p_pos, s_pos, t_pos, r_std, q_std, p_std, \
+            s_std, t_std, q_times_std, p_times_std, s_times_std, t_times_std, r_amp_skew, r_amp_kurtosis, \
+            p_eng, t_eng, pr_std, qt_std, qs_std = preprocess_pqrst(templates)
+
             qrs_corr_med, qrs_corr_std = calculate_qrs_correlation_statistics(templates)
 
             # amplitudes
@@ -301,8 +333,11 @@ def extract_template_features(X):
             s_time_std[i] = s_times_std
             t_time_std[i] = t_times_std
 
+            pr_stdv[i] = pr_std
+            qt_stdv[i] = qt_std
+            qs_stdv[i] = qs_std
+
             # intervals
-            # median_rr[i] = rr
             median_qrs[i] = qrs_end - qrs_start
             median_pr[i] = r_pos - p_pos
             median_qt[i] = t_pos - q_pos
@@ -315,6 +350,18 @@ def extract_template_features(X):
             # qrs correlation
             qrs_corr_coeff_med[i] = qrs_corr_med
             qrs_corr_coeff_std[i] = qrs_corr_std
+
+            # arhythmia index
+            arhythm_idx[i] = arhythmia_index(rr)
+
+            # r_amp features
+            r_kurtosis[i] = r_amp_kurtosis
+            r_skew[i] = r_amp_skew
+
+            # energies
+            p_energy[i] = p_eng
+            t_energy[i] = t_eng
+
 
         else:
 
@@ -344,12 +391,27 @@ def extract_template_features(X):
             median_qt[i] = np.nan
             median_qs[i] = np.nan
 
+            pr_stdv[i] = np.nan
+            qt_stdv[i] = np.nan
+            qs_stdv[i] = np.nan
+
             # st
             st[i] = np.nan
 
             # qrs correlation
             qrs_corr_coeff_med[i] = np.nan
             qrs_corr_coeff_std[i] = np.nan
+
+            # arhythmia index
+            arhythm_idx[i] = np.nan
+
+            # r_amp features
+            r_kurtosis[i] = np.nan
+            r_skew[i] = np.nan
+
+            # energies
+            p_energy[i] = np.nan
+            t_energy[i] = np.nan
 
     feat = dict()
     feat["Ramp"] = median_r_amp
@@ -361,6 +423,9 @@ def extract_template_features(X):
     feat["pr"] = median_pr
     feat["qt"] = median_qt
     feat["qs"] = median_qs
+    feat["pr_std"] = pr_stdv
+    feat["qt_std"] = qt_stdv
+    feat["qs_std"] = qs_stdv
     feat["st"] = st
     feat["R_amp_std"] = r_amp_std
     feat["Q_amp_std"] = q_amp_std
@@ -373,5 +438,10 @@ def extract_template_features(X):
     feat["T_time_std"] = t_time_std
     feat["qrs_corr_coeff_med"] = qrs_corr_coeff_med
     feat["qrs_corr_coeff_std"] = qrs_corr_coeff_std
+    feat["arhythm_index"] = arhythm_idx
+    feat["r_amp_kurtosis"] = r_kurtosis
+    feat["r_amp_skew"] = r_skew
+    feat["p_eng"] = p_energy
+    feat["t_eng"] = t_energy
 
     return feat
