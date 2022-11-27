@@ -136,4 +136,6 @@ task2/data/*.csv
 !task2/data/pyHRV_features_test.csv
 !task2/data/template_features.csv
 !task2/data/template_features_test.csv
+!task2/data/hrv-analysis_features.csv
+!task2/data/hrv-analysis_features_test.csv
 task2/challenge
