@@ -130,12 +130,7 @@ dmypy.json
 
 # Personal
 .DS_Store
-task2/data/*.csv
-!task2/data/sample.csv
-!task2/data/pyHRV_features.csv
-!task2/data/pyHRV_features_test.csv
-!task2/data/template_features.csv
-!task2/data/template_features_test.csv
-!task2/data/hrv-analysis_features.csv
-!task2/data/hrv-analysis_features_test.csv
+task2/data/X_train.csv
+task2/data/Y_train.csv
+task2/data/X_test.csv
 task2/challenge
