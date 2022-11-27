@@ -4,6 +4,8 @@ import pyhrv.time_domain as td
 import pyhrv.tools as tools
 from template_features import *
 
+# caution: this took 2 hours to calculate!
+
 X = pd.read_csv("X_train.csv")
 feat = dict()
 
