@@ -132,4 +132,8 @@ dmypy.json
 .DS_Store
 task2/data/*.csv
 !task2/data/sample.csv
+!task2/data/pyHRV_features.csv
+!task2/data/pyHRV_features_test.csv
+!task2/data/template_features.csv
+!task2/data/template_features_test.csv
 task2/challenge
