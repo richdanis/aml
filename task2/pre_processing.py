@@ -47,6 +47,9 @@ def pre_process(signal, freq=300.0):
     return ts, signal, signal_flt, rpeaks, templates_ts, templates
 
 
+
+
+
 def check_R(rpeaks, templates_ts, templates, corr_thresh=0.9, freq=300.0):
 
     # Check lengths

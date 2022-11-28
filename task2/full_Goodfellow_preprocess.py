@@ -191,3 +191,15 @@ def pre_process(signal_raw):
     templates, r_peaks = filter_rpeaks(templates, r_peaks)
 
     return templates, r_peaks, rr
+
+
+def filter_invert(signal_raw):
+    signal = apply_filter(signal_raw)
+    (r_peaks,) = ecg.hamilton_segmenter(signal, sampling_rate=300)
+    (r_peaks,) = ecg.correct_rpeaks(signal=signal, rpeaks=r_peaks, sampling_rate=300, tol=0.05)
+    templates, r_peaks = ecg.extract_heartbeats(signal, r_peaks, sampling_rate=300, before=0.25, after=0.4)
+    templates = templates.T
+    signal, templates, signal_raw = invert(signal, templates, signal_raw)
+    templates, r_peaks = r_peak_check(signal, templates, r_peaks)
+    signal, templates, signal_raw = invert(signal, templates, signal_raw)
+    return signal
