@@ -190,7 +190,7 @@ def pre_process(signal_raw):
     # -> this is only done for template statistics
     templates, r_peaks = filter_rpeaks(templates, r_peaks)
 
-    return templates, r_peaks, rr
+    return templates, r_peaks, rr, signal
 
 
 def filter_invert(signal_raw):

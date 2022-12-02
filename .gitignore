@@ -131,6 +131,6 @@ dmypy.json
 # Personal
 .DS_Store
 task2/data/X_train.csv
-task2/data/Y_train.csv
+task2/data/y_train.csv
 task2/data/X_test.csv
 task2/challenge

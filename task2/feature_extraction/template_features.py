@@ -244,6 +244,122 @@ def arhythmia_index(dRR):
     return np.sum(cat) / cat.shape[0]
 
 
+# from https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4360105&tag=1
+def bin_count(seg):
+    m = seg
+    bc = 0
+    pc = 0
+
+    for i in range(-2, 3):
+        b = np.sum(seg.diagonal(i) != 0)
+        p = np.sum(seg.diagonal(i))
+        bc += b
+        pc += p
+        m = m - np.diag(m.diagonal(i), i)
+
+    return bc, pc, m
+
+
+def af_evidence(rr, origin_boundary=20, bin_edge=600):
+    drr = np.diff(rr) * 1000
+    # need drr in ms
+
+    # from -600 ms to 600ms -> 1200ms / 40 = 30 bins in each direction
+    # 15 is middle
+    bins = np.zeros((30, 30))
+    # need regions 1,2,3,4 (hard), 5,6,10 (somewhat easier, especially 5,6) and 7,8,12 (somewhat easier, especially 7,8)
+
+    lorentz = np.stack((drr[1:], drr[:-1]), axis=-1)
+
+    originCount = np.sum(np.abs(lorentz), axis=1)
+    originCount = (originCount <= origin_boundary).sum()
+
+    # removing outliers
+    cleaned = []
+    for i in range(lorentz.shape[0]):
+        if np.sum(np.abs(lorentz[i])) < 1500:
+            cleaned.append(lorentz[i])
+
+    lorentz = np.array(cleaned)
+    if not cleaned:
+        lorentz = np.array([[0, 0]])
+
+    h, _, _ = np.histogram2d(lorentz[:, 0], lorentz[:, 1], bins=30,
+                             range=[[-bin_edge, bin_edge], [-bin_edge, bin_edge]])
+
+    # clearing the zero segment
+    h[13, 14:16] = 0
+    h[14:16, 13:17] = 0
+    h[16, 14:16] = 0
+
+    irregularity_evidence = np.sum(h != 0)
+
+    # calculate bin count and point count for segments 9, 10, 11, 12
+    seg_12 = h[15:, 15:]
+    bc_12, pc_12, m = bin_count(seg_12)
+    h[15:, 15:] = m
+
+    seg_11 = h[15:, :15]
+    seg_11 = np.fliplr(seg_11)
+    bc_11, pc_11, m = bin_count(seg_11)
+    h[15:, :15] = np.fliplr(m)
+
+    seg_10 = h[:15, :15]
+    bc_10, pc_10, m = bin_count(seg_10)
+    h[:15, :15] = m
+
+    seg_9 = h[:15, 15:]
+    seg_9 = np.fliplr(seg_9)
+    bc_9, pc_9, m = bin_count(seg_9)
+    h[:15, 15:] = np.fliplr(m)
+
+    # calculate bin count and point count for segments 5, 6, 7, 8
+    seg_5 = h[:15, 13:17]
+    bc_5 = np.sum(seg_5 != 0)
+    pc_5 = np.sum(seg_5)
+
+    seg_6 = h[13:17, :15]
+    bc_6 = np.sum(seg_6 != 0)
+    pc_6 = np.sum(seg_6)
+
+    seg_7 = h[15:, 13:17]
+    bc_7 = np.sum(seg_7 != 0)
+    pc_7 = np.sum(seg_7)
+
+    seg_8 = h[13:17, 15:]
+    bc_8 = np.sum(seg_8 != 0)
+    pc_8 = np.sum(seg_8)
+
+    # clear the segments 5, 6, 7, 8 for easier calculation of 1, 2, 3, 4
+    h[13:17, :] = 0
+    h[:, 13:17] = 0
+
+    # calculate bin count and point count for segments 1, 2, 3, 4
+    seg_1 = h[:13, 17:]
+    bc_1 = np.sum(seg_1 != 0)
+    pc_1 = np.sum(seg_1)
+
+    seg_2 = h[:13, :13]
+    bc_2 = np.sum(seg_2 != 0)
+    pc_2 = np.sum(seg_2)
+
+    seg_3 = h[17:, :13]
+    bc_3 = np.sum(seg_3 != 0)
+    pc_3 = np.sum(seg_3)
+
+    seg_4 = h[17:, 17:]
+    bc_4 = np.sum(seg_4 != 0)
+    pc_4 = np.sum(seg_4)
+
+    pace_evidence = (pc_1 - bc_1) + (pc_2 - bc_2) + (pc_3 - bc_3) + (pc_4 - bc_4) \
+                    + (pc_5 - bc_5) + (pc_6 - bc_6) + (pc_10 - bc_10) \
+                    - (pc_7 - bc_7) - (pc_8 - bc_8) - (pc_12 - bc_12)
+
+    af_evidence = irregularity_evidence - 2 * pace_evidence - originCount
+
+    return af_evidence
+
+
 def extract_template_features(X):
     # template features
 
