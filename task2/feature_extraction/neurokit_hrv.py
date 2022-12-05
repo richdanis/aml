@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import neurokit2 as nk
-from full_Goodfellow_preprocess import *
+from full_preprocess import *
 
 X = pd.read_csv("X_test.csv")
 

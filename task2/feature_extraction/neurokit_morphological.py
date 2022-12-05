@@ -5,7 +5,7 @@ import biosppy.signals.ecg as ecg
 from biosppy.signals.tools import filter_signal
 import scipy as sc
 import neurokit2 as nk
-from full_Goodfellow_preprocess import *
+from full_preprocess import *
 
 
 def interval(a, b):

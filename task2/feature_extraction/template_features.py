@@ -1,27 +1,24 @@
 import numpy as np
 import biosppy.signals.ecg as ecg
-from full_Goodfellow_preprocess import *
+from full_preprocess import *
 
 
-def calculate_qrs_bounds(templates):
-    # Empty lists of QRS start and end times
+def qrs_begin_end(templates):
+    # Calculates begin and end of qrs complex
     qrs_starts_sp = []
     qrs_ends_sp = []
 
     rpeak_pos = int(300 * 0.25)
     after_rpeak = int(300 * 0.4)
 
-    # Loop through templates
     for template in range(templates.shape[1]):
 
-        # Get zero crossings before the R-Peak
         pre_qrs_zero_crossings = np.where(
             np.diff(np.sign(templates[0:rpeak_pos, template]))
         )[0]
 
-        # Check length
         if len(pre_qrs_zero_crossings) >= 2:
-            # Append QRS starting index
+            
             qrs_starts_sp = np.append(qrs_starts_sp, pre_qrs_zero_crossings[-2])
 
         if len(qrs_starts_sp) > 0:
@@ -31,14 +28,13 @@ def calculate_qrs_bounds(templates):
         else:
             qrs_start_sp = int(rpeak_pos / 2.0)
 
-        # Get zero crossings after the R-Peak
+
         post_qrs_zero_crossings = np.where(
             np.diff(np.sign(templates[rpeak_pos:-1, template]))
         )[0]
 
-        # Check length
         if len(post_qrs_zero_crossings) >= 2:
-            # Append QRS ending index
+            
             qrs_ends_sp = np.append(qrs_ends_sp, post_qrs_zero_crossings[-2])
 
         if len(qrs_ends_sp) > 0:
@@ -51,25 +47,25 @@ def calculate_qrs_bounds(templates):
     return qrs_start_sp, qrs_end_sp
 
 
-def preprocess_pqrst(templates):
+def pqrst_wave_statistics(templates):
+    # calculate the times of the different waves and statistics of these waves
+    
     rpeak_pos = int(300 * 0.25)
     median_template = np.median(templates, axis=1)
-    # Get QRS start point
+
     qrs_start_sp = rpeak_pos - 30
 
-    # Get QRS end point
+    
     qrs_end_sp = rpeak_pos + 40
 
-    # Get QR median template
     qr_median_template = median_template[qrs_start_sp:rpeak_pos]
 
-    # Get RS median template
+    
     rs_median_template = median_template[rpeak_pos:qrs_end_sp]
 
-    # Get QR templates
     qr_templates = templates[qrs_start_sp:rpeak_pos, :]
 
-    # Get RS templates
+
     rs_templates = templates[rpeak_pos:qrs_end_sp, :]
 
     """
@@ -84,20 +80,20 @@ def preprocess_pqrst(templates):
     """
     Q-Wave
     """
-    # Get array of Q-wave times (sp)
+
     q_times_sp = np.array(
         [qrs_start_sp + np.argmin(qr_templates[:, col]) for col in range(qr_templates.shape[1])]
     )
 
-    # Get array of Q-wave amplitudes
+   
     q_amps = np.array(
         [templates[q_times_sp[col], col] for col in range(templates.shape[1])]
     )
 
-    # Get array of Q-wave times (sp)
+
     q_pos = qrs_start_sp + np.argmin(qr_median_template)
 
-    # Get array of Q-wave amplitudes
+
     q_amp = median_template[q_pos]
     q_amp_std = np.std(q_amps)
     q_times_std = np.std(q_times_sp)
@@ -105,21 +101,20 @@ def preprocess_pqrst(templates):
     """
     P-Wave
     """
-    # Get array of Q-wave times (sp)
+   
     p_times_sp = np.array([
         np.argmax(templates[0:q_times_sp[col], col])
         for col in range(templates.shape[1])
     ])
 
-    # Get array of Q-wave amplitudes
     p_amps = np.array(
         [templates[p_times_sp[col], col] for col in range(templates.shape[1])]
     )
 
-    # Get array of Q-wave times (sp)
+
     p_pos = np.argmax(median_template[0:q_pos])
 
-    # Get array of Q-wave amplitudes
+
     p_amp = median_template[p_pos]
     p_amp_std = np.std(p_amps)
     p_times_std = np.std(p_times_sp)
@@ -128,21 +123,19 @@ def preprocess_pqrst(templates):
     """
     S-Wave
     """
-    # Get array of Q-wave times (sp)
+
     s_times_sp = np.array([
         rpeak_pos + np.argmin(rs_templates[:, col])
         for col in range(rs_templates.shape[1])
     ])
 
-    # Get array of Q-wave amplitudes
     s_amps = np.array(
         [templates[s_times_sp[col], col] for col in range(templates.shape[1])]
     )
 
-    # Get array of Q-wave times (sp)
+
     s_pos = rpeak_pos + np.argmin(rs_median_template)
 
-    # Get array of Q-wave amplitudes
     s_amp = median_template[s_pos]
     s_amp_std = np.std(s_amps)
     s_times_std = np.std(s_times_sp)
@@ -150,21 +143,18 @@ def preprocess_pqrst(templates):
     """
     T-Wave
     """
-    # Get array of Q-wave times (sp)
+
     t_times_sp = np.array([
         s_times_sp[col] + np.argmax(templates[s_times_sp[col]:, col])
         for col in range(templates.shape[1])
     ])
 
-    # Get array of Q-wave amplitudes
     t_amps = np.array(
         [templates[t_times_sp[col], col] for col in range(templates.shape[1])]
     )
 
-    # Get array of Q-wave times (sp)
     t_pos = s_pos + np.argmax(median_template[s_pos:])
 
-    # Get array of Q-wave amplitudes
     t_amp = median_template[t_pos]
     t_amp_std = np.std(t_amps)
     t_times_std = np.std(t_times_sp)
@@ -184,26 +174,26 @@ def preprocess_pqrst(templates):
 
 
 def calculate_qrs_correlation_statistics(templates):
+    # calculate correlation qrs correlation with median qrs
+    
     if templates.shape[1] > 1:
 
-        # Get start and end points
         rpeak_pos = int(0.25 * 300)
         start_sp = rpeak_pos - 30
         end_sp = rpeak_pos + 40
 
-        # Calculate correlation matrix
         correlation_matrix = np.corrcoef(np.transpose(templates[start_sp:end_sp, :]))
 
-        # Get upper triangle
+    
         upper_triangle = np.triu(correlation_matrix, k=1).flatten()
 
-        # Get upper triangle index where values are not zero
+       
         upper_triangle_index = np.triu(correlation_matrix, k=1).flatten().nonzero()[0]
 
-        # Get upper triangle values where values are not zero
+
         upper_triangle = upper_triangle[upper_triangle_index]
 
-        # Calculate correlation matrix statistics
+       
         qrs_corr_coeff_median = np.median(upper_triangle)
         qrs_corr_coeff_std = np.std(upper_triangle, ddof=1)
 
@@ -422,10 +412,10 @@ def extract_template_features(X):
 
             median_template = np.median(templates, axis=1)
 
-            qrs_start, qrs_end = calculate_qrs_bounds(templates)
+            qrs_start, qrs_end = qrs_begin_end(templates)
             r_amp, q_amp, p_amp, s_amp, t_amp, r_pos, q_pos, p_pos, s_pos, t_pos, r_std, q_std, p_std, \
             s_std, t_std, q_times_std, p_times_std, s_times_std, t_times_std, r_amp_skew, r_amp_kurtosis, \
-            p_eng, t_eng, pr_std, qt_std, qs_std = preprocess_pqrst(templates)
+            p_eng, t_eng, pr_std, qt_std, qs_std = pqrst_wave_statistics(templates)
 
             qrs_corr_med, qrs_corr_std = calculate_qrs_correlation_statistics(templates)
 
