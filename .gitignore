@@ -134,3 +134,7 @@ task2/data/X_train.csv
 task2/data/y_train.csv
 task2/data/X_test.csv
 task2/challenge
+
+
+task3/data/train.pkl
+task3/data/test.pkl
