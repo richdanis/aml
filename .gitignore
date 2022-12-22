@@ -138,3 +138,6 @@ task2/challenge
 
 task3/data/train.pkl
 task3/data/test.pkl
+
+task3/model/model_V*_epoch_*.pt
+!task3/model/model_V*_epoch_5.pt

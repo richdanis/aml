@@ -12,7 +12,9 @@ class Unet(nn.Module):
 
         self.max_pool = nn.MaxPool2d(2)
         
-        self.block_enc_1 = self.conv_block(1, filters)
+        filters = filters*3
+        
+        self.block_enc_1 = self.conv_block(3, filters)
         self.block_enc_2 = self.conv_block(filters, 2*filters)
         self.block_enc_3 = self.conv_block(2*filters, 4*filters)
         self.block_enc_4 = self.conv_block(4*filters, 8*filters)
